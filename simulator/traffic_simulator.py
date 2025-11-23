@@ -1,8 +1,9 @@
 import random
 import time
 import requests
+from datetime import datetime
 
-BACKEND_EVENTS_URL = "http://127.0.0.1:8000/events"  # сюда шлём события
+BACKEND_EVENTS_URL = "http://127.0.0.1:8000/events"
 
 ATTACK_IPS = [
     "10.0.0.10",
@@ -15,30 +16,31 @@ NORMAL_IPS = [
     "192.168.0.6",
 ]
 
+DEST_IPS = [
+    "192.168.1.10",
+    "192.168.1.20",
+]
+
 PORTS = [22, 80, 443, 21, 25, 8080, 3389]
 
 
 def generate_event():
-    """
-    Генерирует одно событие:
-    - либо «атакующий» IP с кучей портов,
-    - либо нормальный IP с 1–2 портами.
-    """
-    is_attack = random.random() < 0.7  # 70% атак, 30% нормальный трафик
+    is_attack = random.random() < 0.7  # 70% "атак" 30% норм
 
     if is_attack:
-        ip = random.choice(ATTACK_IPS)
-        ports = random.sample(PORTS, k=random.randint(3, 6))
-        kind = "attack"
+        src_ip = random.choice(ATTACK_IPS)
     else:
-        ip = random.choice(NORMAL_IPS)
-        ports = random.sample(PORTS, k=random.randint(1, 2))
-        kind = "normal"
+        src_ip = random.choice(NORMAL_IPS)
+
+    dest_ip = random.choice(DEST_IPS)
+    dest_port = random.choice(PORTS)
 
     event = {
-        "src_ip": ip,
-        "ports": ports,
-        "kind": kind, 
+        "source_ip": src_ip,
+        "dest_ip": dest_ip,
+        "dest_port": dest_port,
+        "protocol": "TCP",
+        "timestamp": datetime.utcnow().isoformat(),
     }
     return event
 
@@ -48,11 +50,11 @@ def main_loop():
         event = generate_event()
         try:
             resp = requests.post(BACKEND_EVENTS_URL, json=event, timeout=2)
-            print(f"Sent event: {event} -> status={resp.status_code}")
+            print(f"Sent event: {event} -> status={resp.status_code} {resp.text}")
         except Exception as e:
             print(f"Error sending event: {e}")
 
-        time.sleep(0.5)  # чтобы не спамить 
+        time.sleep(0.5)
 
 
 if __name__ == "__main__":
