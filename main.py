@@ -1,24 +1,41 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, IPvAnyAddress
 from typing import List, Optional
 from datetime import datetime
 import itertools
+import requests
 
 app = FastAPI(
     title="Система защиты от атаки сканирования сетевых портов (Port Scan Protection)",
 )
 
+# --- CORS ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],      # Разрешаем доступ с фронтенда
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- Конфигурация ---
 _incident_id_gen = itertools.count(1)
 _block_request_id_gen = itertools.count(1)
 
-EVENTS = []         
-INCIDENTS = []       
-BLOCK_REQUESTS = []  
+EVENTS = []
+INCIDENTS = []
+BLOCK_REQUESTS = []
 
-SCAN_STATE = {}      
+SCAN_STATE = {}
 
 PORT_SCAN_THRESHOLD = 3
 
+# URL сервиса блоклиста
+BLOCKLIST_SERVICE_URL = "http://127.0.0.1:8001"
+
+
+# --- Модели ---
 class Event(BaseModel):
     source_ip: IPvAnyAddress
     dest_ip: IPvAnyAddress
@@ -32,7 +49,7 @@ class Incident(BaseModel):
     source_ip: IPvAnyAddress
     ports: List[int]
     created_at: datetime
-    status: str = "open"  
+    status: str = "open"
 
 
 class BlockRequest(BaseModel):
@@ -48,8 +65,8 @@ class BlockRequestCreate(BaseModel):
     reason: str
 
 
+# --- Логика детекта ---
 def detect_port_scan(event: Event) -> Optional[Incident]:
-
     ip = str(event.source_ip)
     port = event.dest_port
 
@@ -58,6 +75,7 @@ def detect_port_scan(event: Event) -> Optional[Incident]:
 
     if len(ports) >= PORT_SCAN_THRESHOLD:
         incident_id = next(_incident_id_gen)
+
         incident = Incident(
             id=incident_id,
             source_ip=event.source_ip,
@@ -65,21 +83,19 @@ def detect_port_scan(event: Event) -> Optional[Incident]:
             created_at=datetime.utcnow(),
             status="open",
         )
+
         INCIDENTS.append(incident.dict())
 
+        # Сбрасываем состояние IP
         SCAN_STATE[ip] = set()
-
         return incident
 
     return None
 
 
+# --- Эндпоинты ---
 @app.post("/events")
 def create_event(event: Event):
-    """
-    Приём события от сенсора/системы мониторинга.
-    """
-    # Добавим timestamp, если не передали
     if event.timestamp is None:
         event.timestamp = datetime.utcnow()
 
@@ -95,16 +111,15 @@ def create_event(event: Event):
 
 @app.get("/incidents", response_model=List[Incident])
 def list_incidents(status: Optional[str] = None):
-   
     if status:
-        return [Incident(**i) for i in INCIDENTS if i.get("status") == status]
+        return [Incident(**i) for i in INCIDENTS if i["status"] == status]
     return [Incident(**i) for i in INCIDENTS]
 
 
 @app.post("/block-requests", response_model=BlockRequest)
 def create_block_request(body: BlockRequestCreate):
- 
     incident = next((i for i in INCIDENTS if i["id"] == body.incident_id), None)
+
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
@@ -119,8 +134,19 @@ def create_block_request(body: BlockRequestCreate):
     )
 
     BLOCK_REQUESTS.append(block_req.dict())
-    
+
+    # меняем статус
     incident["status"] = "blocked"
+
+    # --- отправляем IP в blocklist-сервис ---
+    try:
+        requests.post(
+            f"{BLOCKLIST_SERVICE_URL}/block",
+            json={"ip": str(block_req.source_ip)},
+            timeout=2,
+        )
+    except Exception as e:
+        print(f"[ERROR] Не удалось связаться с blocklist-service: {e}")
 
     return block_req
 

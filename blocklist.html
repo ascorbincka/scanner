@@ -5,34 +5,42 @@
     <title>Blocklist</title>
 </head>
 <body>
-
 <h1>Заблокированные IP</h1>
 
 <ul id="list"></ul>
+<p id="error" style="color:red;"></p>
 
 <script src="api.js"></script>
-
 <script>
 async function loadBlocklist() {
+    const ul = document.getElementById("list");
+    const err = document.getElementById("error");
+    err.textContent = "";
+    ul.innerHTML = "";
+
     try {
         const data = await getBlocklist();
-        const ul = document.querySelector("#list");
-        ul.innerHTML = "";
+
+        if (data.length === 0) {
+            const li = document.createElement("li");
+            li.textContent = "Пока нет заблокированных IP";
+            ul.appendChild(li);
+            return;
+        }
 
         data.forEach(ip => {
             const li = document.createElement("li");
             li.textContent = ip;
             ul.appendChild(li);
         });
-    } catch (err) {
-        console.error("Ошибка при загрузке blocklist:", err);
+    } catch (e) {
+        console.error(e);
+        err.textContent = e.message;
     }
 }
 
-// автообновление каждые 3 секунды
 setInterval(loadBlocklist, 3000);
 loadBlocklist();
 </script>
-
 </body>
 </html>
