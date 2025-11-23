@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Инциденты</title>
+</head>
+<body>
+
+<h1>Инциденты</h1>
+
+<table border="1" id="incTable">
+    <thead>
+        <tr>
+            <th>IP</th>
+            <th>Порты</th>
+            <th>Время</th>
+            <th>Действие</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script src="api.js"></script>
+
+<script>
+async function loadIncidents() {
+    try {
+        const data = await getIncidents();
+        const tbody = document.querySelector("#incTable tbody");
+        tbody.innerHTML = "";
+
+        data.forEach(inc => {
+            const tr = document.createElement("tr");
+
+            tr.innerHTML = `
+                <td>${inc.ip}</td>
+                <td>${inc.ports.join(", ")}</td>
+                <td>${inc.timestamp}</td>
+                <td>
+                    <button onclick="blockIp('${inc.ip}')">
+                        Заблокировать
+                    </button>
+                </td>
+            `;
+
+            tbody.appendChild(tr);
+        });
+    } catch (err) {
+        console.error("Ошибка при загрузке инцидентов:", err);
+    }
+}
+
+// автообновление каждые 2 секунды
+setInterval(loadIncidents, 2000);
+loadIncidents();
+</script>
+
+</body>
+</html>
