@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Blocklist</title>
+</head>
+<body>
+
+<h1>Заблокированные IP</h1>
+
+<ul id="list"></ul>
+
+<script src="api.js"></script>
+
+<script>
+async function loadBlocklist() {
+    try {
+        const data = await getBlocklist();
+        const ul = document.querySelector("#list");
+        ul.innerHTML = "";
+
+        data.forEach(ip => {
+            const li = document.createElement("li");
+            li.textContent = ip;
+            ul.appendChild(li);
+        });
+    } catch (err) {
+        console.error("Ошибка при загрузке blocklist:", err);
+    }
+}
+
+// автообновление каждые 3 секунды
+setInterval(loadBlocklist, 3000);
+loadBlocklist();
+</script>
+
+</body>
+</html>
