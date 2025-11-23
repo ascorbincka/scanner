@@ -5,55 +5,77 @@
     <title>Инциденты</title>
 </head>
 <body>
-
 <h1>Инциденты</h1>
 
 <table border="1" id="incTable">
     <thead>
         <tr>
+            <th>ID</th>
             <th>IP</th>
             <th>Порты</th>
-            <th>Время</th>
+            <th>Статус</th>
+            <th>Создан</th>
             <th>Действие</th>
         </tr>
     </thead>
     <tbody></tbody>
 </table>
 
-<script src="api.js"></script>
+<p id="error" style="color: red;"></p>
 
+<script src="api.js"></script>
 <script>
 async function loadIncidents() {
+    const tbody = document.querySelector("#incTable tbody");
+    const err = document.getElementById("error");
+    err.textContent = "";
+    tbody.innerHTML = "";
+
     try {
         const data = await getIncidents();
-        const tbody = document.querySelector("#incTable tbody");
-        tbody.innerHTML = "";
+
+        if (data.length === 0) {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td colspan="6">Инцидентов пока нет</td>`;
+            tbody.appendChild(tr);
+            return;
+        }
 
         data.forEach(inc => {
             const tr = document.createElement("tr");
 
             tr.innerHTML = `
-                <td>${inc.ip}</td>
+                <td>${inc.id}</td>
+                <td>${inc.source_ip}</td>
                 <td>${inc.ports.join(", ")}</td>
-                <td>${inc.timestamp}</td>
+                <td>${inc.status}</td>
+                <td>${inc.created_at}</td>
                 <td>
-                    <button onclick="blockIp('${inc.ip}')">
-                        Заблокировать
-                    </button>
+                    ${inc.status === "open"
+                        ? `<button onclick="onBlock(${inc.id})">Заблокировать</button>`
+                        : "—"}
                 </td>
             `;
 
             tbody.appendChild(tr);
         });
-    } catch (err) {
-        console.error("Ошибка при загрузке инцидентов:", err);
+    } catch (e) {
+        console.error(e);
+        err.textContent = e.message;
     }
 }
 
-// автообновление каждые 2 секунды
+async function onBlock(incidentId) {
+    try {
+        await createBlockRequest(incidentId);
+        await loadIncidents();
+    } catch (e) {
+        alert("Ошибка блокировки: " + e.message);
+    }
+}
+
 setInterval(loadIncidents, 2000);
 loadIncidents();
 </script>
-
 </body>
 </html>
