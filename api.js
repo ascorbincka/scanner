@@ -1,42 +1,70 @@
-// frontend/api.js
-const API_BASE = "http://127.0.0.1:8000";   // main.py
-const BLOCKLIST_API = "http://127.0.0.1:8001"; // blocklist_service.py
+const BACKEND_URL = "http://127.0.0.1:8000";
 
-// список инцидентов
-async function getIncidents() {
-    const resp = await fetch(`${API_BASE}/incidents`);
-    if (!resp.ok) {
-        throw new Error("Ошибка при запросе /incidents: " + resp.status);
-    }
-    return await resp.json();
+async function apiRequest(path, options = {}) {
+  const url = `${BACKEND_URL}${path}`;
+  const resp = await fetch(url, {
+    headers: {
+      "Content-Type": "application/json",
+    },
+    ...options,
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`HTTP ${resp.status}: ${text}`);
+  }
+
+  if (resp.status === 204) {
+    return null;
+  }
+
+  return resp.json();
 }
 
-// создать запрос на блокировку по id инцидента
-async function createBlockRequest(incidentId) {
-    const body = {
-        incident_id: incidentId,
-        reason: "Blocked from UI",
-    };
-
-    const resp = await fetch(`${API_BASE}/block-requests`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-    });
-
-    if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error("Ошибка /block-requests: " + resp.status + " " + text);
-    }
-
-    return await resp.json();
+export async function getIncidents(status = null) {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return apiRequest(`/incidents${qs}`, {
+    method: "GET",
+  });
 }
 
-// список заблокированных ip из blocklist-сервиса
-async function getBlocklist() {
-    const resp = await fetch(`${BLOCKLIST_API}/blocklist`);
-    if (!resp.ok) {
-        throw new Error("Ошибка /blocklist: " + resp.status);
-    }
-    return await resp.json();
+// Обновление статуса инцидента
+export async function updateIncidentStatus(incidentId, newStatus) {
+  return apiRequest(`/incidents/${incidentId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: newStatus }),
+  });
+}
+
+// Создать запрос на блокировку по инциденту
+export async function createBlockRequest(incidentId, reason) {
+  return apiRequest(`/block-requests`, {
+    method: "POST",
+    body: JSON.stringify({
+      incident_id: incidentId,
+      reason: reason,
+    }),
+  });
+}
+
+// Выполнить запрос блокировки 
+export async function executeBlockRequest(requestId) {
+  return apiRequest(`/block-requests/${requestId}/execute`, {
+    method: "POST",
+  });
+}
+
+// Получить список всех запросов на блокировку
+export async function getBlockRequests() {
+  return apiRequest(`/block-requests`, {
+    method: "GET",
+  });
+}
+
+// Ожидается backend-эндпоинт
+export async function getRecentEvents(limit = 50) {
+  const qs = `?limit=${limit}`;
+  return apiRequest(`/events${qs}`, {
+    method: "GET",
+  });
 }
