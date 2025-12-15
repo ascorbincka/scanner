@@ -1,12 +1,27 @@
+// api.js — ES module
 const BACKEND_URL = "http://127.0.0.1:8000";
+
+// допустимые роли (должны совпадать с main.py)
+const VALID_ROLES = ["admin", "analyst", "observer"];
+const ROLE_KEY = "psp_role";
+
+function getRole() {
+  const raw = (localStorage.getItem(ROLE_KEY) || "observer").toLowerCase();
+  return VALID_ROLES.includes(raw) ? raw : "observer";
+}
 
 async function apiRequest(path, options = {}) {
   const url = `${BACKEND_URL}${path}`;
+
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Role": getRole(), // 🔥 КРИТИЧНО
+    ...(options.headers || {}),
+  };
+
   const resp = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
-    },
     ...options,
+    headers,
   });
 
   if (!resp.ok) {
@@ -14,21 +29,16 @@ async function apiRequest(path, options = {}) {
     throw new Error(`HTTP ${resp.status}: ${text}`);
   }
 
-  if (resp.status === 204) {
-    return null;
-  }
-
+  if (resp.status === 204) return null;
   return resp.json();
 }
 
+// ===== Incidents =====
 export async function getIncidents(status = null) {
   const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-  return apiRequest(`/incidents${qs}`, {
-    method: "GET",
-  });
+  return apiRequest(`/incidents${qs}`, { method: "GET" });
 }
 
-// Обновление статуса инцидента
 export async function updateIncidentStatus(incidentId, newStatus) {
   return apiRequest(`/incidents/${incidentId}/status`, {
     method: "PATCH",
@@ -36,35 +46,42 @@ export async function updateIncidentStatus(incidentId, newStatus) {
   });
 }
 
-// Создать запрос на блокировку по инциденту
-export async function createBlockRequest(incidentId, reason) {
+// ===== Blocklist / Block Requests =====
+export async function createBlockRequest(incidentId, reason, ttl_seconds = undefined) {
+  const body = { incident_id: incidentId, reason };
+  if (ttl_seconds !== undefined) body.ttl_seconds = ttl_seconds;
+
   return apiRequest(`/block-requests`, {
     method: "POST",
-    body: JSON.stringify({
-      incident_id: incidentId,
-      reason: reason,
-    }),
+    body: JSON.stringify(body),
   });
 }
 
-// Выполнить запрос блокировки 
 export async function executeBlockRequest(requestId) {
   return apiRequest(`/block-requests/${requestId}/execute`, {
     method: "POST",
   });
 }
 
-// Получить список всех запросов на блокировку
 export async function getBlockRequests() {
-  return apiRequest(`/block-requests`, {
+  return apiRequest(`/block-requests`, { method: "GET" });
+}
+
+// ===== Events =====
+export async function getRecentEvents() {
+  return apiRequest(`/events`, { method: "GET" });
+}
+
+// ===== Analytics =====
+export async function getAnalyticsSummary(period = "day") {
+  return apiRequest(`/analytics/summary?period=${encodeURIComponent(period)}`, {
     method: "GET",
   });
 }
 
-// Ожидается backend-эндпоинт
-export async function getRecentEvents(limit = 50) {
-  const qs = `?limit=${limit}`;
-  return apiRequest(`/events${qs}`, {
+export async function getAnalyticsTimeseries(period = "day") {
+  return apiRequest(`/analytics/timeseries?period=${encodeURIComponent(period)}`, {
     method: "GET",
   });
 }
+
